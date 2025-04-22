@@ -49,6 +49,7 @@ import (
 
 	"mvdan.cc/garble/internal/linker"
 	"mvdan.cc/garble/internal/literals"
+	"mvdan.cc/garble/internal/sourceSeed"
 )
 
 var flagSet = flag.NewFlagSet("garble", flag.ExitOnError)
@@ -69,7 +70,7 @@ func init() {
 	flagSet.BoolVar(&flagTiny, "tiny", false, "Optimize for binary size, losing some ability to reverse the process")
 	flagSet.BoolVar(&flagDebug, "debug", false, "Print debug logs to stderr")
 	flagSet.StringVar(&flagDebugDir, "debugdir", "", "Write the obfuscated source to a directory, e.g. -debugdir=out")
-	flagSet.Var(&flagSeed, "seed", "Provide a base64-encoded seed, e.g. -seed=o9WDTZ4CN4w\nFor a random seed, provide -seed=random")
+	flagSet.Var(&flagSeed, "seed", "Provide a base64-encoded seed, e.g. -seed=o9WDTZ4CN4w\nFor a random seed, provide -seed=random\nTo use the source code as the input key, provide -seed=\"source ADDITIONNAL FILES OR DIR\"")
 }
 
 var rxGarbleFlag = regexp.MustCompile(`-(?:literals|tiny|debug|debugdir|seed)(?:$|=)`)
@@ -93,6 +94,15 @@ func (f *seedFlag) Set(s string) error {
 		if _, err := cryptorand.Read(f.bytes); err != nil {
 			return fmt.Errorf("error generating random seed: %v", err)
 		}
+	} else if strings.HasPrefix(s, "source") {
+		// We compute the seed from the source code itself
+		// Option added by pvotal
+		seed, err := sourceSeed.GetSourceSeed(strings.Split(s, " ")[1:])
+		if err != nil {
+			return fmt.Errorf("error getting source seed: %v", err)
+		}
+
+		f.bytes = seed
 	} else {
 		// We expect unpadded base64, but to be nice, accept padded
 		// strings too.
