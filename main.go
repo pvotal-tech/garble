@@ -97,7 +97,7 @@ func (f *seedFlag) Set(s string) error {
 	} else if strings.HasPrefix(s, "source") {
 		// We compute the seed from the source code itself
 		// Option added by pvotal
-		seed, err := sourceSeed.GetSourceSeed(strings.Split(s, " ")[1:])
+		seed, err := sourceSeed.GetSourceSeed(".", strings.Split(s, " ")[1:])
 		if err != nil {
 			return fmt.Errorf("error getting source seed: %v", err)
 		}

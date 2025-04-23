@@ -32,7 +32,7 @@ type CustomCanonicalWriter struct {
 // The standalone files are hashed, then the directories are hashed
 //
 // When hashing a directory, only the .go files are hashed, and those starting with gen_ are excluded
-func GetSourceSeed(additionnalFiles []string) ([]byte, error) {
+func GetSourceSeed(baseDir string, additionnalFiles []string) ([]byte, error) {
 	// Hash all the source files
 	hasher := blake3.New(SEED_SIZE, nil)
 
@@ -47,7 +47,7 @@ func GetSourceSeed(additionnalFiles []string) ([]byte, error) {
 
 		// Hash the additionnal files passed in the CLI
 		for _, path := range additionnalFiles {
-			statInfo, err := os.Stat(path)
+			statInfo, err := os.Stat(baseDir + "/" + path)
 
 			if err != nil {
 				log.Printf("[WARN] error computing seed reading path %s, ignoring: %s", path, err)
@@ -63,7 +63,7 @@ func GetSourceSeed(additionnalFiles []string) ([]byte, error) {
 
 		// Hash the standalone files
 		for _, path := range filesToHash {
-			err := addFileToWriter(path, canonicalWriter, hasher)
+			err := addFileToWriter(baseDir, path, canonicalWriter, hasher)
 
 			if err != nil {
 				return nil, err
@@ -72,7 +72,7 @@ func GetSourceSeed(additionnalFiles []string) ([]byte, error) {
 
 		// Hash the dirs
 		for _, dir := range dirsToHash {
-			err := addDirToWriter(dir, canonicalWriter, hasher)
+			err := addDirToWriter(baseDir, dir, canonicalWriter, hasher)
 
 			if err != nil {
 				return nil, err
@@ -119,7 +119,7 @@ func (w CustomCanonicalWriter) Write(input []byte) (n int, err error) {
 	return len(input), nil
 }
 
-func addFileToWriter(path string, writer io.Writer, hasher *blake3.Hasher) error {
+func addFileToWriter(baseDir string, path string, writer io.Writer, hasher *blake3.Hasher) error {
 	// Write a delimiter to domain separate the files.
 	// 0xF8-0xFF are never used in unicode, so we use it
 	// Writes it directly into the hasher so it doesn't get stripped
@@ -132,7 +132,7 @@ func addFileToWriter(path string, writer io.Writer, hasher *blake3.Hasher) error
 
 	hasher.Write([]byte{0xFF})
 
-	file, err := os.Open(cleanedPath)
+	file, err := os.Open(baseDir + "/" + cleanedPath)
 	if err != nil {
 		return err
 	}
@@ -143,17 +143,19 @@ func addFileToWriter(path string, writer io.Writer, hasher *blake3.Hasher) error
 	return err
 }
 
-func addDirToWriter(path string, writer io.Writer, hasher *blake3.Hasher) error {
+func addDirToWriter(baseDir string, path string, writer io.Writer, hasher *blake3.Hasher) error {
 	// NOTE: We need to make sure the path are canonicalized and always in the same order.
 	// The docs of WalkDir mentions the order is deterministic
-	err := filepath.WalkDir(path, func(path string, d fs.DirEntry, err error) error {
+	err := filepath.WalkDir(baseDir+"/"+path, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 
+		relativePath := strings.TrimPrefix(path, baseDir+"/")
+
 		// We only want to hash the go files that are not generated
 		if strings.HasSuffix(path, ".go") && !strings.Contains(path, "gen_") {
-			err = addFileToWriter(path, writer, hasher)
+			err = addFileToWriter(baseDir, relativePath, writer, hasher)
 
 			if err != nil {
 				return err
