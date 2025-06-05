@@ -74,8 +74,6 @@ binsubstr stdout 'InternalFunction'
 
 # Check that the seeds didn't change since last version
 test-source-seed Nl9o+7pkuOElNBJJBVJDpC4LnCI3aONbPrlh17lNLSM ${SEED1}
-
-# TODO: File path are not consistant here because absolute path in tmp
 test-source-seed /Nb6b4Zcgur7+XinD9I7+kFZYKrfw24yXzO+6k2hh0w ${SEED2}
 test-source-seed OI3DP+QAs2Xn1V2GfzijDg3+8AOLN5jVXQ8g1EBEI4Y ${SEED3}
 
