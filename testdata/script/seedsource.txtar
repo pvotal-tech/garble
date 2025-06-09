@@ -1,0 +1,121 @@
+# Copied and modified from seed.txtar
+
+env SEED1='source'
+env SEED2='source additionnalFile.md'
+env SEED3='source additionnalFile.md additional_dir'
+
+# Check the binary with default seed.
+exec garble -seed=${SEED1} build
+cp main$exe main_seed1$exe
+binsubstr main_seed1$exe 'teststring'
+
+# Also check that the binary is reproducible.
+rm main$exe
+exec garble -seed=${SEED1} build -v
+! stderr .
+bincmp main$exe main_seed1$exe
+
+# Also check that the different seeds leads to a different binary
+exec garble -seed=${SEED2} build
+! stderr .
+cp main$exe main_seed2$exe
+
+exec garble -seed=${SEED3} build
+! stderr .
+cp main$exe main_seed3$exe
+
+! bincmp main_seed1$exe main_seed2$exe
+! bincmp main_seed1$exe main_seed3$exe
+! bincmp main_seed2$exe main_seed3$exe
+
+# Ensure all binaries still works
+exec ./main_seed1$exe
+cmp stderr main.stderr
+binsubstr main$exe 'teststring'
+
+exec ./main_seed2$exe
+cmp stderr main.stderr
+binsubstr main$exe 'teststring'
+
+exec ./main_seed3$exe
+cmp stderr main.stderr
+binsubstr main$exe 'teststring'
+
+# Make it crash to get stack traces
+! exec ./main_seed1$exe crash
+cp stderr seed1.stderr
+
+! exec ./main_seed2$exe crash
+cp stderr seed2.stderr
+
+! exec ./main_seed3$exe crash
+cp stderr seed3.stderr
+
+# Make sure that the func name are obfuscated and different
+! binsubstr seed1.stderr 'InternalFunction'
+! binsubstr seed2.stderr 'InternalFunction'
+! binsubstr seed3.stderr 'InternalFunction'
+! cmp seed1.stderr seed2.stderr
+! cmp seed2.stderr seed3.stderr
+! cmp seed1.stderr seed3.stderr
+
+# Reverse the outputs
+stdin ./seed1.stderr
+exec garble -seed=${SEED1} reverse .
+binsubstr stdout 'InternalFunction'
+
+stdin ./seed2.stderr
+exec garble -seed=${SEED2} reverse .
+binsubstr stdout 'InternalFunction'
+
+stdin ./seed3.stderr
+exec garble -seed=${SEED3} reverse .
+binsubstr stdout 'InternalFunction'
+
+# Check that the seeds didn't change since last version
+test-source-seed Nl9o+7pkuOElNBJJBVJDpC4LnCI3aONbPrlh17lNLSM ${SEED1}
+test-source-seed /Nb6b4Zcgur7+XinD9I7+kFZYKrfw24yXzO+6k2hh0w ${SEED2}
+test-source-seed OI3DP+QAs2Xn1V2GfzijDg3+8AOLN5jVXQ8g1EBEI4Y ${SEED3}
+
+-- go.mod --
+module test/main
+
+go 1.23
+-- go.sum --
+
+-- main.go --
+package main
+
+import (
+	"test/main/internal/realmain"
+)
+
+func main() { mainFunc() }
+
+func mainFunc() {
+	realmain.InternalFunction();
+}
+
+-- internal/realmain/realmain.go --
+package realmain
+
+import (
+	"os"
+)
+
+var teststringVar = "teststring"
+
+func InternalFunction() {
+	if len(os.Args) > 1 {
+		// We panic here to get a stack trace
+		panic("program shouldn't be called with an argument!")
+	} else {
+		println(teststringVar)
+	}
+}
+-- main.stderr --
+teststring
+-- additionnalFile.md --
+# This is an additionnal file to hash for seed 2
+-- additional_dir/additionnal_file.go --
+package additionnalDir

@@ -4,6 +4,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/base64"
 	"flag"
 	"fmt"
 	"go/ast"
@@ -26,6 +28,7 @@ import (
 	"github.com/rogpeppe/go-internal/testscript"
 
 	ah "mvdan.cc/garble/internal/asthelper"
+	"mvdan.cc/garble/internal/sourceSeed"
 )
 
 var proxyURL string
@@ -146,6 +149,7 @@ func TestScript(t *testing.T) {
 			"setenvfile":        setenvfile,
 			"grepfiles":         grepfiles,
 			"setup-go":          setupGo,
+			"test-source-seed":  testSourceSeed,
 		},
 		UpdateScripts:       *update,
 		RequireExplicitExec: true,
@@ -155,6 +159,34 @@ func TestScript(t *testing.T) {
 		t.Fatal(err)
 	}
 	testscript.Run(t, p)
+}
+
+// Added by pvotal
+// Detects if the computed seed changes for specific sources
+func testSourceSeed(ts *testscript.TestScript, neg bool, args []string) {
+	// Decode expected seed
+	expected, err := base64.RawStdEncoding.DecodeString(args[0])
+	if err != nil {
+		ts.Fatalf("error decoding seed: %v", err)
+	}
+
+	additionnalFiles := strings.Split(args[1], " ")[1:]
+
+	// Hash the files
+	seed, err := sourceSeed.GetSourceSeed(ts.MkAbs("."), additionnalFiles)
+	if err != nil {
+		ts.Fatalf("%v", err)
+	}
+
+	// Check if the seed is valid
+	if neg == bytes.Equal(seed, expected) {
+		comparison := "differs from"
+		if neg {
+			comparison = "is equal to"
+		}
+
+		ts.Fatalf("unexpected match: %s %s %s", base64.RawStdEncoding.EncodeToString(seed), comparison, args[0])
+	}
 }
 
 func createFile(ts *testscript.TestScript, path string) *os.File {
